@@ -58,8 +58,8 @@ public class RedisLockProvider implements LockProvider {
         RedisConnection redisConnection = null;
         try {
             redisConnection = redisConnectionFactory.getConnection();
-            Expiration expiration = getExpiration(lockConfiguration.getLockAtMostUntil());
-            if (redisConnection.set(key.getBytes(), buildValue(), expiration, SetOption.SET_IF_ABSENT)) {
+            if (redisConnection.setNX(key.getBytes(), buildValue())) {
+                redisConnection.pExpire(key.getBytes(), getMsUntil(lockConfiguration.getLockAtMostUntil()));
                 return Optional.of(new RedisLock(key, redisConnectionFactory, lockConfiguration));
             } else {
                 return Optional.empty();
@@ -70,7 +70,11 @@ public class RedisLockProvider implements LockProvider {
     }
 
     private static Expiration getExpiration(Instant until) {
-        return Expiration.from(Duration.between(Instant.now(), until).toMillis(), TimeUnit.MILLISECONDS);
+        return Expiration.from(getMsUntil(until), TimeUnit.MILLISECONDS);
+    }
+
+    private static long getMsUntil(Instant until) {
+        return Duration.between(Instant.now(), until).toMillis();
     }
 
     private static void close(RedisConnection redisConnection) {
